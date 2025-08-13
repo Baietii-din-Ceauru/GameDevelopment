@@ -1,0 +1,21 @@
+name: Enforce PR Source Branch
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR source branch
+        run: |
+          echo "🔍 Checking source branch for PR #${{ github.event.pull_request.number }}..."
+          if [[ "${{ github.head_ref }}" != "staging" ]]; then
+            echo "❌ ERROR: Pull requests to main must come from staging."
+            echo "Current source branch: '${{ github.head_ref }}'"
+            exit 1
+          else
+            echo "✅ Source branch is staging. PR is allowed."
+          fi
