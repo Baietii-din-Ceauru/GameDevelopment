@@ -1,12 +1,19 @@
 name: Enforce PR Source Branch
 
 on:
-  pull_request:
-    branches:
-      - main
+  workflow_call:  # This makes it reusable
+    inputs:
+      target_branch:
+        description: "The branch that PRs must target"
+        default: "main"
+        required: false
+      required_source:
+        description: "The only allowed source branch"
+        default: "staging"
+        required: false
 
 permissions:
-  pull-requests: write   # Needed to comment and close PRs
+  pull-requests: write
 
 jobs:
   check-source:
@@ -14,20 +21,26 @@ jobs:
     steps:
       - name: Check and act on PR source branch
         run: |
-          echo "🔍 Checking source branch for PR #${{ github.event.pull_request.number }}..."
-          if [[ "${{ github.head_ref }}" != "staging" ]]; then
-            echo "❌ Invalid source branch: '${{ github.head_ref }}'"
-            
-            # Add a comment explaining the closure
-            gh pr comment ${{ github.event.pull_request.number }} \
-              --body "⚠️ This PR was automatically closed because PRs to **main** must come from **staging**. Please update your branch and try again."
+          PR_NUMBER=${{ github.event.pull_request.number }}
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          TARGET_BRANCH="${{ github.base_ref }}"
 
-            # Close the PR
-            gh pr close ${{ github.event.pull_request.number }}
+          echo "🔍 PR #$PR_NUMBER from '$SOURCE_BRANCH' → '$TARGET_BRANCH'"
+
+          if [[ "$TARGET_BRANCH" == "${{ inputs.target_branch }}" && "$SOURCE_BRANCH" != "${{ inputs.required_source }}" ]]; then
+            echo "❌ Invalid source branch: '$SOURCE_BRANCH'"
+
+            # Comment
+            gh api repos/${{ github.repository }}/issues/$PR_NUMBER/comments \
+              -f body="⚠️ This PR was automatically closed because PRs to **${{ inputs.target_branch }}** must come from **${{ inputs.required_source }}**."
+
+            # Close PR
+            gh api repos/${{ github.repository }}/pulls/$PR_NUMBER \
+              -X PATCH -f state=closed
 
             exit 1
           else
-            echo "✅ Source branch is staging. PR is allowed."
+            echo "✅ PR source branch is allowed."
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
